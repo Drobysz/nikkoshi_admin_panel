@@ -82,8 +82,7 @@ class ArticleController extends Controller
             Storage::disk('s3')->putFileAs(
                 $path,
                 $file,
-                'cover.' . $file->getClientOriginalExtension(),
-                'public'
+                'cover.' . $file->getClientOriginalExtension()
             );
         }
 

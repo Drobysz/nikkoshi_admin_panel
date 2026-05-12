@@ -1,3 +1,840 @@
+<project-guidelines>
+
+# Nikkoshi API Project Context
+
+## Project Overview
+
+Nikkoshi is a Laravel API and admin panel project for a website about temples and shrines in Japan. The main content entity is an `Article`. Each article has an author, a cover image, paragraphs, and historical timeline events.
+
+The API is intentionally simple and is focused on CRUD operations for articles and related article content.
+
+## Main Models
+
+The project uses four main models:
+
+- `User`
+- `Article`
+- `Paragraph`
+- `Timeline`
+
+## Database Relationships
+
+```text
+User hasMany Article
+Article belongsTo User as author
+Article hasMany Paragraph
+Article hasMany Timeline
+Paragraph belongsTo Article
+Timeline belongsTo Article
+```
+
+More specifically:
+
+```text
+users.id -> articles.author_id
+articles.id -> paragraphs.article_id
+articles.id -> timelines.article_id
+```
+
+The `author_id` field in `articles` references `users.id`.
+
+## Database Tables
+
+### users
+
+The `users` table is used for admin users.
+
+```text
+id
+name
+password
+remember_token
+timestamps
+```
+
+Important note: the user does **not** have an `email` field in this project.
+
+### articles
+
+```text
+id
+title
+subtitle
+year
+type
+author_id
+timestamps
+```
+
+### paragraphs
+
+```text
+id
+article_id
+title
+text
+order
+timestamps
+```
+
+### timelines
+
+```text
+id
+article_id
+year
+event
+timestamps
+```
+
+## Laravel Naming Conventions
+
+The project follows Laravel table naming conventions:
+
+```text
+Article -> articles
+Paragraph -> paragraphs
+Timeline -> timelines
+User -> users
+```
+
+If the model name is `Article` and the table is `articles`, the model does not need:
+
+```php
+protected $table = 'articles';
+```
+
+Laravel will automatically resolve the table name.
+
+## Foreign Keys
+
+If a foreign key references `$table->id()`, its type should match Laravel's default ID type:
+
+```php
+$table->foreignId('article_id');
+```
+
+or:
+
+```php
+$table->unsignedBigInteger('article_id');
+```
+
+For article paragraphs and timelines, `article_id` should usually be required and cascade on delete:
+
+```php
+$table->foreignId('article_id')
+    ->constrained('articles')
+    ->cascadeOnDelete();
+```
+
+For article authors:
+
+```php
+$table->foreignId('author_id')
+    ->constrained('users');
+```
+
+If `nullOnDelete()` is used, the field must also be nullable:
+
+```php
+$table->foreignId('author_id')
+    ->nullable()
+    ->constrained('users')
+    ->nullOnDelete();
+```
+
+## Authentication
+
+The project uses Laravel Sanctum for API authentication.
+
+Login is performed using:
+
+```text
+name
+password
+```
+
+The password is stored as a hash.
+
+Password checking should be done like this:
+
+```php
+Hash::check($data['password'], $user->password)
+```
+
+The plain password from the request should **not** be manually hashed before `Hash::check()`.
+
+Correct:
+
+```php
+Hash::check($plainPassword, $hashedPasswordFromDatabase);
+```
+
+Incorrect:
+
+```php
+Hash::check(Hash::make($plainPassword), $hashedPasswordFromDatabase);
+```
+
+## Sanctum Tokens
+
+After a successful login, the API returns a Sanctum token:
+
+```php
+$token = $user->createToken('token')->plainTextToken;
+```
+
+The frontend or API client should send this token in the `Authorization` header:
+
+```http
+Authorization: Bearer YOUR_TOKEN_HERE
+```
+
+In Insomnia, use:
+
+```text
+Auth Type: Bearer Token
+Token: 1|your_token_here
+Prefix: Bearer
+```
+
+The full token must be used, including the part before the pipe symbol:
+
+```text
+1|xxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Current API Routes
+
+The current `api.php` structure is:
+
+```php
+Route::post('/register', [UserController::class, 'store']);
+Route::post('/login',    [UserController::class, 'login']);
+Route::post('/logout',   [UserController::class, 'logout'])
+    ->middleware('auth:sanctum');
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::apiResource(
+        'articles',
+        ArticleController::class
+    );
+});
+
+Route::fallback(function () {
+    return response()->json(["message" => "Not found"], 404);
+});
+```
+
+This creates the following important endpoints:
+
+```text
+POST   /api/register
+POST   /api/login
+POST   /api/logout
+GET    /api/articles
+POST   /api/articles
+GET    /api/articles/{article}
+PUT    /api/articles/{article}
+PATCH  /api/articles/{article}
+DELETE /api/articles/{article}
+```
+
+Since `articles` is inside the `auth:sanctum` group, all article routes require a Bearer token.
+
+## Recommended API Route Structure
+
+A more practical structure is to make `index` and `show` public, while protecting create/update/delete routes:
+
+```php
+Route::prefix('auth')->group(function () {
+    Route::post('/register', [UserController::class, 'store']);
+    Route::post('/login', [UserController::class, 'login']);
+    Route::post('/logout', [UserController::class, 'logout'])
+        ->middleware('auth:sanctum');
+});
+
+Route::apiResource('articles', ArticleController::class)
+    ->only(['index', 'show']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::apiResource('articles', ArticleController::class)
+        ->only(['store', 'update', 'destroy']);
+
+    Route::post('/articles/{article}/paragraphs', [ParagraphController::class, 'store']);
+    Route::put('/paragraphs/{paragraph}', [ParagraphController::class, 'update']);
+    Route::patch('/paragraphs/{paragraph}', [ParagraphController::class, 'update']);
+    Route::delete('/paragraphs/{paragraph}', [ParagraphController::class, 'destroy']);
+
+    Route::post('/articles/{article}/timelines', [TimelineController::class, 'store']);
+    Route::put('/timelines/{timeline}', [TimelineController::class, 'update']);
+    Route::patch('/timelines/{timeline}', [TimelineController::class, 'update']);
+    Route::delete('/timelines/{timeline}', [TimelineController::class, 'destroy']);
+
+    Route::apiResource('users', UserController::class)
+        ->only(['update', 'destroy']);
+});
+```
+
+## Article Request Contract
+
+### Create Article
+
+```text
+POST /api/articles
+Content-Type: multipart/form-data
+Authorization: Bearer TOKEN
+Accept: application/json
+```
+
+Required fields:
+
+```text
+title: string
+subtitle: string
+type: string
+year: numeric
+author_id: exists:users,id
+cover: image
+```
+
+Optional nested fields:
+
+```text
+paragraphs: array
+paragraphs.*.title: string
+paragraphs.*.text: string
+paragraphs.*.order: integer
+
+timelines: array
+timelines.*.year: numeric
+timelines.*.event: string
+```
+
+## Sending Nested Arrays in Insomnia
+
+When using `multipart/form-data`, send nested arrays using bracket syntax.
+
+Example:
+
+```text
+paragraphs[0][title]   History
+paragraphs[0][text]    Kinkaku-ji is one of the most famous Zen temples in Kyoto.
+paragraphs[0][order]   1
+
+paragraphs[1][title]   Architecture
+paragraphs[1][text]    The top two floors are completely covered in gold leaf.
+paragraphs[1][order]   2
+
+timelines[0][year]     1397
+timelines[0][event]    The villa was built.
+
+timelines[1][year]     1950
+timelines[1][event]    The pavilion was burned down.
+```
+
+This lets Laravel automatically convert the fields into arrays.
+
+Avoid sending `paragraphs` and `timelines` as raw JSON strings inside multipart form data unless you manually decode them in `prepareForValidation()`.
+
+## StoreArticleRequest Example
+
+```php
+public function rules(): array
+{
+    return [
+        'title' => ['required', 'string'],
+        'subtitle' => ['required', 'string'],
+        'type' => ['required', 'string'],
+        'year' => ['required', 'numeric'],
+        'author_id' => ['required', 'exists:users,id'],
+        'cover' => ['required', 'image', 'max:104240'],
+
+        'paragraphs' => ['sometimes', 'array'],
+        'paragraphs.*.title' => ['required', 'string'],
+        'paragraphs.*.text' => ['required', 'string'],
+        'paragraphs.*.order' => ['required', 'integer'],
+
+        'timelines' => ['sometimes', 'array'],
+        'timelines.*.year' => ['required', 'numeric'],
+        'timelines.*.event' => ['required', 'string'],
+    ];
+}
+```
+
+## ArticleController Store Logic
+
+The article should be created first, then paragraphs, timelines, and the cover image should be attached.
+
+Important: remove `cover`, `paragraphs`, and `timelines` from `$data` before calling `Article::create()`.
+
+```php
+public function store(StoreArticleRequest $request)
+{
+    $data = $request->validated();
+
+    $paragraphs = $data['paragraphs'] ?? [];
+    $timelines = $data['timelines'] ?? [];
+
+    unset($data['cover'], $data['paragraphs'], $data['timelines']);
+
+    $article = Article::query()->create($data);
+
+    if (!empty($paragraphs)) {
+        $article->paragraphs()->createMany($paragraphs);
+    }
+
+    if (!empty($timelines)) {
+        $article->timelines()->createMany($timelines);
+    }
+
+    if ($request->hasFile('cover')) {
+        $file = $request->file('cover');
+
+        Storage::disk('s3')->putFileAs(
+            "covers/{$article->id}",
+            $file,
+            'cover.' . $file->getClientOriginalExtension()
+        );
+    }
+
+    $article->load(['author', 'paragraphs', 'timelines']);
+
+    return (new ArticleResource($article))
+        ->additional([
+            'msg' => 'Article created successfully',
+        ])
+        ->response()
+        ->setStatusCode(201);
+}
+```
+
+## S3 Storage
+
+The project stores article cover images in AWS S3.
+
+Current S3 configuration:
+
+```text
+Bucket: nikko-temples-bucket
+Region: eu-west-3
+```
+
+Images are stored using this structure:
+
+```text
+covers/{article_id}/cover.{extension}
+```
+
+Example:
+
+```text
+covers/6/cover.png
+covers/7/cover.jpg
+```
+
+The required Laravel package is:
+
+```bash
+composer require league/flysystem-aws-s3-v3 "^3.0"
+```
+
+Basic S3 configuration in `.env`:
+
+```env
+FILESYSTEM_DISK=s3
+
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_DEFAULT_REGION=eu-west-3
+AWS_BUCKET=nikko-temples-bucket
+AWS_USE_PATH_STYLE_ENDPOINT=true
+```
+
+After changing `.env`, always run:
+
+```bash
+php artisan optimize:clear
+php artisan config:clear
+```
+
+Then restart the Laravel server:
+
+```bash
+php artisan serve
+```
+
+## Testing S3 in Tinker
+
+Run:
+
+```bash
+php artisan tinker
+```
+
+Then test:
+
+```php
+Storage::disk('s3')->put('test.txt', 'hello');
+Storage::disk('s3')->files('');
+```
+
+Expected successful result:
+
+```php
+true
+[
+    "test.txt"
+]
+```
+
+## Article Image URL Accessor
+
+The current approach can scan the S3 folder:
+
+```php
+public function getImageUrlAttribute(): ?string
+{
+    $directory = "covers/{$this->id}";
+
+    $files = Storage::disk('s3')->files($directory);
+
+    if (empty($files)) {
+        return null;
+    }
+
+    return Storage::disk('s3')->url($files[0]);
+}
+```
+
+This works for a small educational project, but it causes an S3 `ListObjectsV2` request every time the image URL is accessed.
+
+A better long-term solution is to store the image path in the database, for example:
+
+```text
+cover_path
+```
+
+Then the accessor can simply be:
+
+```php
+public function getImageUrlAttribute(): ?string
+{
+    if (!$this->cover_path) {
+        return null;
+    }
+
+    return Storage::disk('s3')->url($this->cover_path);
+}
+```
+
+## ArticleResource
+
+The article resource should return:
+
+```text
+id
+title
+subtitle
+year
+type
+created_at
+author
+img_url or image_url
+paragraphs
+timelines
+```
+
+Example structure:
+
+```php
+return [
+    'id' => $this->id,
+    'title' => $this->title,
+    'subtitle' => $this->subtitle,
+    'year' => $this->year,
+    'type' => $this->type,
+    'created_at' => $this->created_at,
+
+    'author' => $this->whenLoaded('author', function () {
+        return [
+            'id' => $this->author?->id,
+            'name' => $this->author?->name,
+        ];
+    }),
+
+    'img_url' => $this->image_url,
+
+    'paragraphs' => $this->whenLoaded('paragraphs'),
+    'timelines' => $this->whenLoaded('timelines'),
+];
+```
+
+## UserResource
+
+The user resource should return only safe public fields:
+
+```php
+return [
+    'id' => $this->id,
+    'name' => $this->name,
+];
+```
+
+Do not generate Sanctum tokens inside `UserResource`.
+
+Tokens should only be created in login or registration logic.
+
+## HTTP Status Codes
+
+Recommended API status codes:
+
+```text
+store/create: 201 Created
+update: 200 OK
+destroy: 204 No Content
+invalid credentials: 401 Unauthorized
+validation error: 422 Unprocessable Content
+not found: 404 Not Found
+```
+
+For `destroy()`, prefer:
+
+```php
+return response()->noContent();
+```
+
+Do not return a JSON body with status `204`.
+
+## Register User Request
+
+```http
+POST /api/register
+Accept: application/json
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "name": "admin",
+  "password": "password123",
+  "password_confirmation": "password123"
+}
+```
+
+## Login Request
+
+```http
+POST /api/login
+Accept: application/json
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "name": "admin",
+  "password": "password123"
+}
+```
+
+Expected response:
+
+```json
+{
+  "user": {
+    "data": {
+      "id": 1,
+      "name": "admin"
+    }
+  },
+  "token": "1|your_token_here"
+}
+```
+
+## Create Article With cURL
+
+```bash
+curl -i -X POST http://localhost:8000/api/articles \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -F "title=Kinkaku-ji" \
+  -F "subtitle=Golden Pavilion" \
+  -F "type=temple" \
+  -F "year=1397" \
+  -F "author_id=1" \
+  -F "cover=@/Users/drobysz/Desktop/header.png" \
+  -F "paragraphs[0][title]=History" \
+  -F "paragraphs[0][text]=Kinkaku-ji is one of the most famous Zen temples in Kyoto." \
+  -F "paragraphs[0][order]=1" \
+  -F "paragraphs[1][title]=Architecture" \
+  -F "paragraphs[1][text]=The top two floors are completely covered in gold leaf." \
+  -F "paragraphs[1][order]=2" \
+  -F "timelines[0][year]=1397" \
+  -F "timelines[0][event]=The villa was built." \
+  -F "timelines[1][year]=1950" \
+  -F "timelines[1][event]=The pavilion was burned down." \
+  -F "timelines[2][year]=1955" \
+  -F "timelines[2][event]=The current structure was rebuilt."
+```
+
+The file field must use `@`:
+
+```bash
+-F "cover=@/path/to/file.png"
+```
+
+Without `@`, curl will send the path as plain text instead of uploading the file.
+
+## Update Article in Insomnia
+
+```http
+PUT /api/articles/{article_id}
+Authorization: Bearer TOKEN
+Accept: application/json
+```
+
+Body can be `Multipart Form` if updating the cover image:
+
+```text
+title       Updated Kinkaku-ji
+subtitle    Updated Golden Pavilion
+type        temple
+year        1400
+author_id   1
+cover       File: new-header.png
+```
+
+If no image is being updated, JSON can be used if the controller/request supports it:
+
+```json
+{
+  "title": "Updated Kinkaku-ji",
+  "subtitle": "Updated Golden Pavilion",
+  "type": "temple",
+  "year": 1400,
+  "author_id": 1
+}
+```
+
+## Delete Article in Insomnia
+
+```http
+DELETE /api/articles/{article_id}
+Authorization: Bearer TOKEN
+Accept: application/json
+```
+
+No body is required.
+
+Expected response:
+
+```text
+204 No Content
+```
+
+## Update Paragraph in Insomnia
+
+```http
+PUT /api/paragraphs/{paragraph_id}
+Authorization: Bearer TOKEN
+Accept: application/json
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "title": "Updated History",
+  "text": "Updated paragraph text about the temple history.",
+  "order": 1
+}
+```
+
+## Delete Paragraph in Insomnia
+
+```http
+DELETE /api/paragraphs/{paragraph_id}
+Authorization: Bearer TOKEN
+Accept: application/json
+```
+
+No body is required.
+
+## Update Timeline in Insomnia
+
+```http
+PUT /api/timelines/{timeline_id}
+Authorization: Bearer TOKEN
+Accept: application/json
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "year": 1951,
+  "event": "Updated timeline event text."
+}
+```
+
+## Delete Timeline in Insomnia
+
+```http
+DELETE /api/timelines/{timeline_id}
+Authorization: Bearer TOKEN
+Accept: application/json
+```
+
+No body is required.
+
+## Common Debugging Commands
+
+List article routes:
+
+```bash
+php artisan route:list --path=api/articles
+```
+
+Clear Laravel cache:
+
+```bash
+php artisan optimize:clear
+php artisan route:clear
+php artisan config:clear
+```
+
+Restart server:
+
+```bash
+php artisan serve
+```
+
+Test route with curl:
+
+```bash
+curl -i -X POST http://localhost:8000/api/articles \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
+If the route works but required fields are missing, Laravel should return:
+
+```text
+422 Unprocessable Content
+```
+
+This means the route and token are valid.
+
+
+</project-guidelines>
+
 <laravel-boost-guidelines>
 === foundation rules ===
 
@@ -38,10 +875,6 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 - Stick to existing directory structure; don't create new base folders without approval.
 - Do not change the application's dependencies without approval.
-
-## Frontend Bundling
-
-- If the user doesn't see a frontend change reflected in the UI, it could mean they need to run `npm run build`, `npm run dev`, or `composer run dev`. Ask them.
 
 ## Documentation Files
 
@@ -154,3 +987,5 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Do NOT delete tests without approval.
 
 </laravel-boost-guidelines>
+
+
