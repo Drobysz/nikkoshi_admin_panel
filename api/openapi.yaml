@@ -1,0 +1,811 @@
+openapi: 3.0.3
+info:
+  title: Nikkoshi Admin API
+  version: 1.0.0
+  description: |
+    Laravel Sanctum API for the Nikkoshi admin panel.
+
+    The API manages admin users and articles about temples in Nikko/Japan.
+    Articles have an author, cover image, paragraphs, and historical timeline events.
+
+servers:
+  - url: http://localhost:8000
+    description: Local Laravel API server
+
+tags:
+  - name: Auth
+    description: Admin login, registration, and logout.
+  - name: Users
+    description: Admin user management.
+  - name: Articles
+    description: Article CRUD with cover images, paragraphs, and timelines.
+  - name: Paragraphs
+    description: Article paragraph management.
+  - name: Timelines
+    description: Article historical timeline management.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new admin user.
+      operationId: registerAdmin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              name: admin
+              password: password123
+              password_confirmation: password123
+      responses:
+        '201':
+          description: Admin user created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResourceResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and receive a Sanctum bearer token.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              name: admin
+              password: password123
+      responses:
+        '200':
+          description: Authenticated user and token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout and revoke current access token.
+      operationId: logout
+      responses:
+        '204':
+          description: Logged out. No response body.
+        '401':
+          $ref: '#/components/responses/AuthError'
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List admin users.
+      operationId: listUsers
+      responses:
+        '200':
+          description: User collection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserCollectionResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+
+  /api/users/{user}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Users]
+      summary: Get a single admin user.
+      operationId: getUser
+      responses:
+        '200':
+          description: User.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResourceResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      tags: [Users]
+      summary: Replace/update an admin user.
+      operationId: replaceUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResourceResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      tags: [Users]
+      summary: Partially update an admin user.
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResourceResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [Users]
+      summary: Delete an admin user.
+      operationId: deleteUser
+      responses:
+        '204':
+          description: User deleted. No response body.
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/articles:
+    get:
+      tags: [Articles]
+      summary: List articles.
+      operationId: listArticles
+      responses:
+        '200':
+          description: Article collection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleCollectionResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+    post:
+      tags: [Articles]
+      summary: Create an article with cover, paragraphs, and timelines.
+      operationId: createArticle
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateArticleRequest'
+            encoding:
+              cover:
+                contentType: image/png, image/jpeg, image/webp
+      responses:
+        '201':
+          description: Article created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleResourceResponseWithMessage'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/articles/{article}:
+    parameters:
+      - $ref: '#/components/parameters/ArticleId'
+    get:
+      tags: [Articles]
+      summary: Get a single article.
+      operationId: getArticle
+      responses:
+        '200':
+          description: Article.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleResourceResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      tags: [Articles]
+      summary: Replace/update an article.
+      operationId: replaceArticle
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UpdateArticleRequest'
+            encoding:
+              cover:
+                contentType: image/png, image/jpeg, image/webp
+      responses:
+        '200':
+          description: Article updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleResourceResponseWithMessage'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      tags: [Articles]
+      summary: Partially update an article.
+      operationId: updateArticle
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UpdateArticleRequest'
+            encoding:
+              cover:
+                contentType: image/png, image/jpeg, image/webp
+      responses:
+        '200':
+          description: Article updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleResourceResponseWithMessage'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [Articles]
+      summary: Delete an article and its S3 cover directory.
+      operationId: deleteArticle
+      responses:
+        '204':
+          description: Article deleted. No response body.
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/articles/{article}/paragraphs:
+    parameters:
+      - $ref: '#/components/parameters/ArticleId'
+    post:
+      tags: [Paragraphs]
+      summary: Add a paragraph to an article.
+      operationId: createParagraph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParagraphRequest'
+      responses:
+        '201':
+          description: Paragraph created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParagraphCreatedResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/paragraphs/{paragraph}:
+    parameters:
+      - $ref: '#/components/parameters/ParagraphId'
+    patch:
+      tags: [Paragraphs]
+      summary: Update a paragraph.
+      operationId: updateParagraph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParagraphUpdateRequest'
+      responses:
+        '200':
+          description: Paragraph updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [Paragraphs]
+      summary: Delete a paragraph.
+      operationId: deleteParagraph
+      responses:
+        '204':
+          description: Paragraph deleted. No response body.
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/articles/{article}/timelines:
+    parameters:
+      - $ref: '#/components/parameters/ArticleId'
+    post:
+      tags: [Timelines]
+      summary: Add a timeline event to an article.
+      operationId: createTimeline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimelineRequest'
+      responses:
+        '201':
+          description: Timeline event created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelineCreatedResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/timelines/{timeline}:
+    parameters:
+      - $ref: '#/components/parameters/TimelineId'
+    patch:
+      tags: [Timelines]
+      summary: Update a timeline event.
+      operationId: updateTimeline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimelineUpdateRequest'
+      responses:
+        '200':
+          description: Timeline event updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [Timelines]
+      summary: Delete a timeline event.
+      operationId: deleteTimeline
+      responses:
+        '204':
+          description: Timeline event deleted. No response body.
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+      description: Laravel Sanctum token returned from `/api/auth/login`.
+
+  parameters:
+    UserId:
+      name: user
+      in: path
+      required: true
+      schema:
+        type: integer
+    ArticleId:
+      name: article
+      in: path
+      required: true
+      schema:
+        type: integer
+    ParagraphId:
+      name: paragraph
+      in: path
+      required: true
+      schema:
+        type: integer
+    TimelineId:
+      name: timeline
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  responses:
+    AuthError:
+      description: Missing, invalid, or expired token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFoundError:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Laravel validation error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: Unauthorized.
+
+    ValidationError:
+      type: object
+      required: [message, errors]
+      properties:
+        message:
+          type: string
+          example: The given data was invalid.
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+    MessageResponse:
+      type: object
+      required: [msg]
+      properties:
+        msg:
+          type: string
+
+    RegisterRequest:
+      type: object
+      required: [name, password, password_confirmation]
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          example: admin
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: password123
+        password_confirmation:
+          type: string
+          format: password
+          minLength: 8
+          example: password123
+
+    LoginRequest:
+      type: object
+      required: [name, password]
+      properties:
+        name:
+          type: string
+          example: admin
+        password:
+          type: string
+          format: password
+          example: password123
+
+    LoginResponse:
+      type: object
+      required: [user, token]
+      properties:
+        user:
+          $ref: '#/components/schemas/UserResourceResponse'
+        token:
+          type: string
+          example: 1|sanctum-token
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: admin-updated
+        password:
+          type: string
+          format: password
+          minLength: 8
+        password_confirmation:
+          type: string
+          format: password
+          minLength: 8
+
+    User:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: admin
+
+    UserResourceResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/User'
+
+    UserCollectionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+
+    Author:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    Paragraph:
+      type: object
+      required: [id, title, text, order]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        text:
+          type: string
+        order:
+          type: integer
+
+    Timeline:
+      type: object
+      required: [id, year, event]
+      properties:
+        id:
+          type: integer
+        year:
+          type: number
+        event:
+          type: string
+
+    Article:
+      type: object
+      required: [id, title, subtitle, year, type]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        subtitle:
+          type: string
+        year:
+          type: number
+          example: 1397
+        type:
+          type: string
+          example: temple
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        author:
+          $ref: '#/components/schemas/Author'
+        img_url:
+          type: string
+          nullable: true
+        paragraphs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Paragraph'
+        timelines:
+          type: array
+          items:
+            $ref: '#/components/schemas/Timeline'
+
+    ArticleResourceResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Article'
+
+    ArticleResourceResponseWithMessage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Article'
+        msg:
+          type: string
+          example: Article created successfully
+
+    ArticleCollectionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Article'
+
+    CreateArticleRequest:
+      type: object
+      required: [title, subtitle, type, year, author_id, cover]
+      properties:
+        title:
+          type: string
+          example: Kinkaku-ji
+        subtitle:
+          type: string
+          example: Golden Pavilion
+        type:
+          type: string
+          example: temple
+        year:
+          type: number
+          example: 1397
+        author_id:
+          type: integer
+          example: 1
+        cover:
+          type: string
+          format: binary
+        paragraphs:
+          type: array
+          description: Use bracket syntax in multipart forms, e.g. `paragraphs[0][title]`.
+          items:
+            $ref: '#/components/schemas/ParagraphInput'
+        timelines:
+          type: array
+          description: Use bracket syntax in multipart forms, e.g. `timelines[0][year]`.
+          items:
+            $ref: '#/components/schemas/TimelineInput'
+
+    UpdateArticleRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        subtitle:
+          type: string
+        type:
+          type: string
+        year:
+          type: number
+        author_id:
+          type: integer
+        cover:
+          type: string
+          format: binary
+
+    ParagraphInput:
+      type: object
+      required: [title, text, order]
+      properties:
+        title:
+          type: string
+        text:
+          type: string
+        order:
+          type: integer
+
+    ParagraphRequest:
+      allOf:
+        - $ref: '#/components/schemas/ParagraphInput'
+
+    ParagraphUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        text:
+          type: string
+        order:
+          type: integer
+
+    ParagraphCreatedResponse:
+      type: object
+      required: [msg, data]
+      properties:
+        msg:
+          type: string
+          example: Paragraph created successfully
+        data:
+          $ref: '#/components/schemas/Paragraph'
+
+    TimelineInput:
+      type: object
+      required: [year, event]
+      properties:
+        year:
+          type: number
+        event:
+          type: string
+
+    TimelineRequest:
+      allOf:
+        - $ref: '#/components/schemas/TimelineInput'
+
+    TimelineUpdateRequest:
+      type: object
+      properties:
+        year:
+          type: number
+        event:
+          type: string
+
+    TimelineCreatedResponse:
+      type: object
+      required: [msg, data]
+      properties:
+        msg:
+          type: string
+          example: Timeline created successfully
+        data:
+          $ref: '#/components/schemas/Timeline'
