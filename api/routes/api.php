@@ -20,22 +20,32 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource(
         'users',
         UserController::class
-    )->only(['update', 'destroy']);
+    )->only(['index', 'show', 'update', 'destroy']);
 
     Route::apiResource(
         'articles',
         ArticleController::class
     );
 
+    Route::post(
+        'articles/{article}/paragraphs',
+        [ParagraphController::class, 'store']
+    );
+
+    Route::post(
+        'articles/{article}/timelines',
+        [TimelineController::class, 'store']
+    );
+
     Route::apiResource(
         'paragraphs',
         ParagraphController::class
-    )->only(['store', 'update', 'destroy']);
+    )->only(['update', 'destroy']);
 
     Route::apiResource(
         'timelines',
         TimelineController::class
-    )->only(['store', 'update', 'destroy']);
+    )->only(['update', 'destroy']);
 });
 
 // Fallback for undefined routes
