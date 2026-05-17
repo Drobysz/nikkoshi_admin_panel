@@ -25,7 +25,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource(
         'articles',
         ArticleController::class
-    );
+    )->except(['index', 'show']);
 
     Route::post(
         'articles/{article}/paragraphs',
@@ -47,6 +47,11 @@ Route::middleware('auth:sanctum')->group(function () {
         TimelineController::class
     )->only(['update', 'destroy']);
 });
+
+Route::apiResource(
+        'articles',
+        ArticleController::class
+    )->only(['index', 'show']);
 
 // Fallback for undefined routes
 Route::fallback(function () {
